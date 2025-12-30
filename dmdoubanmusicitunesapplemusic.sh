@@ -123,10 +123,16 @@ albuminfo, albumartist, sortAlbum, sortAlbumArtist, sortArtist, storeUrl = [
 finalAlbum = sortAlbum or albuminfo
 finalArtist = sortAlbumArtist or sortArtist or albumartist
 
+original_has_cjk = False
+if re.search(r"[\\u4e00-\\u9fff]", (albuminfo + " " + albumartist).strip()):
+    original_has_cjk = True
+
 needs_lookup = False
 if not finalAlbum or not finalArtist:
     needs_lookup = True
 if re.search(r"[\\u4e00-\\u9fff]", finalAlbum + " " + finalArtist):
+    needs_lookup = True
+if original_has_cjk:
     needs_lookup = True
 
 def itunes_lookup(lookup_id):
@@ -180,8 +186,11 @@ if needs_lookup:
         base_album = (sortAlbum or albuminfo).strip()
         base_artist = (sortAlbumArtist or sortArtist or albumartist).strip()
         combined = (base_album + " " + base_artist).strip()
+        combined_orig = (albuminfo.strip() + " " + albumartist.strip()).strip()
         if combined:
             search_terms.append(combined)
+        if combined_orig and combined_orig != combined:
+            search_terms.append(combined_orig)
         if base_album and re.search(r"[\\u4e00-\\u9fff]", base_artist):
             search_terms.append(base_album)
         if albuminfo and albuminfo != base_album:
@@ -199,6 +208,9 @@ if needs_lookup:
         finalAlbum = item.get("collectionName") or finalAlbum
         artist_from_item = item.get("collectionArtistName") or item.get("artistName")
         finalArtist = artist_from_item or finalArtist
+    elif original_has_cjk:
+        finalAlbum = albuminfo or finalAlbum
+        finalArtist = albumartist or finalArtist
 
 query = (finalAlbum + " " + finalArtist).strip()
 print(urllib.parse.quote(query))

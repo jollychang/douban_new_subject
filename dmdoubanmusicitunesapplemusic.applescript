@@ -74,6 +74,9 @@ end if
 if my containsCJK(finalAlbum) or my containsCJK(finalArtist) then
 	set needsLookup to true
 end if
+if my containsCJK(albuminfo) or my containsCJK(albumartist) then
+	set needsLookup to true
+end if
 
 if needsLookup then
 	set lookupScript to ""
@@ -92,6 +95,9 @@ if needsLookup then
 	set lookupScript to lookupScript & "        if 0x4E00 <= code <= 0x9FFF:" & linefeed
 	set lookupScript to lookupScript & "            return True" & linefeed
 	set lookupScript to lookupScript & "    return False" & linefeed
+	set lookupScript to lookupScript & "original_has_cjk = False" & linefeed
+	set lookupScript to lookupScript & "if contains_cjk((albuminfo + ' ' + albumartist).strip()):" & linefeed
+	set lookupScript to lookupScript & "    original_has_cjk = True" & linefeed
 	set lookupScript to lookupScript & "def itunes_lookup(lookup_id):" & linefeed
 	set lookupScript to lookupScript & "    try:" & linefeed
 	set lookupScript to lookupScript & "        lookup_url = 'https://itunes.apple.com/lookup?id={}&country=us'.format(lookup_id)" & linefeed
@@ -120,6 +126,8 @@ if needsLookup then
 	set lookupScript to lookupScript & "    needs_lookup = True" & linefeed
 	set lookupScript to lookupScript & "if contains_cjk(final_album + ' ' + final_artist):" & linefeed
 	set lookupScript to lookupScript & "    needs_lookup = True" & linefeed
+	set lookupScript to lookupScript & "if original_has_cjk:" & linefeed
+	set lookupScript to lookupScript & "    needs_lookup = True" & linefeed
 	set lookupScript to lookupScript & "item = None" & linefeed
 	set lookupScript to lookupScript & "if needs_lookup:" & linefeed
 	set lookupScript to lookupScript & "    if store_url:" & linefeed
@@ -137,8 +145,11 @@ if needsLookup then
 	set lookupScript to lookupScript & "        base_album = (sort_album or albuminfo).strip()" & linefeed
 	set lookupScript to lookupScript & "        base_artist = (sort_album_artist or sort_artist or albumartist).strip()" & linefeed
 	set lookupScript to lookupScript & "        combined = (base_album + ' ' + base_artist).strip()" & linefeed
+	set lookupScript to lookupScript & "        combined_orig = (albuminfo.strip() + ' ' + albumartist.strip()).strip()" & linefeed
 	set lookupScript to lookupScript & "        if combined:" & linefeed
 	set lookupScript to lookupScript & "            search_terms.append(combined)" & linefeed
+	set lookupScript to lookupScript & "        if combined_orig and combined_orig != combined:" & linefeed
+	set lookupScript to lookupScript & "            search_terms.append(combined_orig)" & linefeed
 	set lookupScript to lookupScript & "        if base_album and contains_cjk(base_artist):" & linefeed
 	set lookupScript to lookupScript & "            search_terms.append(base_album)" & linefeed
 	set lookupScript to lookupScript & "        if albuminfo and albuminfo != base_album:" & linefeed
@@ -155,6 +166,9 @@ if needsLookup then
 	set lookupScript to lookupScript & "    final_album = item.get('collectionName') or final_album" & linefeed
 	set lookupScript to lookupScript & "    artist_from_item = item.get('collectionArtistName') or item.get('artistName')" & linefeed
 	set lookupScript to lookupScript & "    final_artist = artist_from_item or final_artist" & linefeed
+	set lookupScript to lookupScript & "elif original_has_cjk:" & linefeed
+	set lookupScript to lookupScript & "    final_album = albuminfo or final_album" & linefeed
+	set lookupScript to lookupScript & "    final_artist = albumartist or final_artist" & linefeed
 	set lookupScript to lookupScript & "print(final_album + '\\t' + final_artist)" & linefeed
 	try
 		set lookupResult to do shell script pythonPath & " -c " & quoted form of lookupScript & " " & quoted form of storeUrl & " " & quoted form of albuminfo & " " & quoted form of albumartist & " " & quoted form of sortAlbum & " " & quoted form of sortAlbumArtist & " " & quoted form of sortArtist
