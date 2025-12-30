@@ -52,6 +52,19 @@
     return (value || "").replace(/\s+/g, " ").trim();
   }
 
+  function escapeRegExp(value) {
+    return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  function stripLabel(value, labelText) {
+    const label = cleanText(labelText).replace(/[:：]\s*$/, "");
+    if (!label) {
+      return cleanText(value);
+    }
+    const regex = new RegExp(`^${escapeRegExp(label)}[:：]?\\s*`, "i");
+    return cleanText(String(value).replace(regex, ""));
+  }
+
   function preferText(...values) {
     for (const value of values) {
       const text = cleanText(value);
@@ -388,18 +401,118 @@
     if (!text) {
       return "";
     }
-    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
-      return text;
+    const stripped = text.replace(/(\d+)(st|nd|rd|th)/gi, "$1").replace(/,/g, "");
+    if (/^\d{4}-\d{2}-\d{2}$/.test(stripped)) {
+      return stripped;
     }
-    if (/^\d{4}-\d{2}$/.test(text)) {
-      return `${text}-01`;
+    if (/^\d{4}-\d{2}$/.test(stripped)) {
+      return `${stripped}-01`;
     }
-    if (/^\d{4}$/.test(text)) {
-      return `${text}-01-01`;
+    if (/^\d{4}$/.test(stripped)) {
+      return `${stripped}-01-01`;
     }
-    const parsed = new Date(text);
+    const parsedEnglish = parseEnglishDate(stripped);
+    if (parsedEnglish) {
+      return parsedEnglish;
+    }
+    const parsed = new Date(stripped);
     if (!Number.isNaN(parsed.getTime())) {
       return parsed.toISOString().slice(0, 10);
+    }
+    return "";
+  }
+
+  function parseEnglishDate(value) {
+    const text = cleanText(value);
+    if (!text) {
+      return "";
+    }
+    const monthMap = {
+      jan: 1,
+      january: 1,
+      feb: 2,
+      february: 2,
+      mar: 3,
+      march: 3,
+      apr: 4,
+      april: 4,
+      may: 5,
+      jun: 6,
+      june: 6,
+      jul: 7,
+      july: 7,
+      aug: 8,
+      august: 8,
+      sep: 9,
+      sept: 9,
+      september: 9,
+      oct: 10,
+      october: 10,
+      nov: 11,
+      november: 11,
+      dec: 12,
+      december: 12
+    };
+
+    const dayMonthYear = text.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/);
+    const monthDayYear = text.match(/^([A-Za-z]+)\s+(\d{1,2})\s+(\d{4})$/);
+    const parts = dayMonthYear || monthDayYear;
+    if (!parts) {
+      return "";
+    }
+
+    const day = Number(dayMonthYear ? parts[1] : parts[2]);
+    const monthName = (dayMonthYear ? parts[2] : parts[1]).toLowerCase();
+    const year = Number(parts[3]);
+    const month = monthMap[monthName];
+    if (!month || !day || !year) {
+      return "";
+    }
+
+    return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  }
+
+  function extractLabelValue(doc, labelRegex) {
+    const candidates = Array.from(doc.querySelectorAll("dt, th, strong, span, div, li"));
+    for (const node of candidates) {
+      const labelText = cleanText(node.textContent);
+      if (!labelText || !labelRegex.test(labelText)) {
+        continue;
+      }
+      if (node.nextSibling && node.nextSibling.nodeType === Node.TEXT_NODE) {
+        const raw = cleanText(node.nextSibling.textContent);
+        if (raw) {
+          return raw;
+        }
+      }
+      const next = node.nextElementSibling;
+      if (next) {
+        const value = cleanText(next.textContent);
+        if (value) {
+          return value;
+        }
+      }
+      const parent = node.parentElement;
+      if (parent) {
+        const link = parent.querySelector("a");
+        if (link) {
+          const value = cleanText(link.textContent);
+          if (value) {
+            return value;
+          }
+        }
+        const parentText = stripLabel(parent.textContent, labelText);
+        if (parentText) {
+          return parentText;
+        }
+        const siblingValue = parent.querySelector("dd, td, span");
+        if (siblingValue) {
+          const value = cleanText(siblingValue.textContent);
+          if (value) {
+            return value;
+          }
+        }
+      }
     }
     return "";
   }
@@ -436,6 +549,48 @@
       data[label] = value;
     });
     return data;
+  }
+
+  function parseMetadataList(doc) {
+    const data = {
+      releaseDate: "",
+      publisher: ""
+    };
+    const items = Array.from(doc.querySelectorAll(".c-product-block__metadata li"));
+    items.forEach((item) => {
+      const labelNode = item.querySelector("strong");
+      if (!labelNode) {
+        return;
+      }
+      const label = cleanText(labelNode.textContent).toLowerCase();
+      if (!label) {
+        return;
+      }
+      if (label.includes("release date") && !data.releaseDate) {
+        data.releaseDate = stripLabel(item.textContent, labelNode.textContent);
+        return;
+      }
+      if ((label.includes("label") || label.includes("publisher")) && !data.publisher) {
+        const link = item.querySelector("a");
+        data.publisher = link ? cleanText(link.textContent) : stripLabel(item.textContent, labelNode.textContent);
+      }
+    });
+    return data;
+  }
+
+  function parseContributors(doc) {
+    const block = doc.querySelector(".c-newproduct-block__contributors");
+    if (!block) {
+      return "";
+    }
+    const items = Array.from(block.querySelectorAll("p, li"))
+      .map((node) => cleanText(node.textContent))
+      .filter(Boolean);
+    const unique = Array.from(new Set(items));
+    if (unique.length) {
+      return unique.join(", ");
+    }
+    return cleanText(block.textContent);
   }
 
   function parsePrestoProduct(html, url) {
@@ -477,6 +632,11 @@
       }
     }
 
+    const contributorText = parseContributors(doc);
+    if (contributorText) {
+      info.artist = contributorText;
+    }
+
     const metaRelease = doc.querySelector("meta[property='music:release_date']")?.getAttribute("content");
     info.releaseDate = preferText(info.releaseDate, normalizeDate(metaRelease));
 
@@ -496,6 +656,24 @@
         info.barcode = normalizeBarcode(value);
       }
     });
+
+    const metadata = parseMetadataList(doc);
+    if (!info.releaseDate && metadata.releaseDate) {
+      info.releaseDate = normalizeDate(metadata.releaseDate);
+    }
+    if (!info.publisher && metadata.publisher) {
+      info.publisher = metadata.publisher;
+    }
+
+    if (!info.releaseDate) {
+      const releaseValue = extractLabelValue(doc, /release date|released/i);
+      info.releaseDate = normalizeDate(releaseValue);
+    }
+
+    if (!info.publisher) {
+      const labelValue = extractLabelValue(doc, /label|publisher/i);
+      info.publisher = labelValue;
+    }
 
     if (!info.barcode) {
       const match = html.match(/\b(?:EAN|UPC|Barcode|Bar code|GTIN)\b[^\d]{0,8}(\d{8,14})/i);
@@ -669,22 +847,33 @@
   }
 
   function splitPerformers(text) {
-    return cleanText(text)
+    const normalized = cleanText(text)
+      .replace(/\s*\([^)]*\)\s*/g, " ")
+      .replace(/\s*（[^）]*）\s*/g, " ");
+    return normalized
       .split(/,|&|;|\//)
       .map((part) => cleanText(part))
       .filter(Boolean);
   }
 
   async function handleNewSubjectPage() {
+    ensurePanel();
     const stored = await storageGet();
     const candidate = stored.candidate;
     const pending = stored.pending;
 
-    if (!candidate || !pending) {
+    if (!candidate) {
+      setStatus("No candidate found. Go back to search page to pick one.");
       return;
     }
 
-    if (isFirstStepForm() && pending.stage === "create") {
+    setQuery(`${candidate.title || ""} ${candidate.artist || ""}`.trim() || "Candidate loaded.");
+    setGoogleLink(`${candidate.title || ""} ${candidate.artist || ""}`.trim());
+    renderResults([candidate]);
+
+    const stage = pending && pending.stage ? pending.stage : "manual";
+
+    if (isFirstStepForm()) {
       const titleInput = document.querySelector("#p_title, input[name='p_title']");
       const barcodeInput = document.querySelector("#uid, input[name='p_uid']");
       fillInputForce(titleInput, candidate.title || "");
@@ -693,9 +882,13 @@
       }
 
       const form = titleInput ? titleInput.closest("form") : document.querySelector("form");
-      if (form) {
+      const shouldSubmit = Boolean(pending && stage !== "detail");
+      if (form && shouldSubmit) {
         await updateState({ pending: { ...pending, stage: "detail" } });
+        setStatus("Filled first step. Submitting...");
         setTimeout(() => form.submit(), 300);
+      } else {
+        setStatus("Filled first step. Submit when ready.");
       }
       return;
     }
@@ -722,7 +915,26 @@
       fillInput(publisherInput, candidate.publisher || "");
       fillInput(referenceInput, candidate.reference || candidate.url || "");
 
-      await updateState({ pending: null });
+      const missing = [];
+      if (releaseInput && !releaseInput.value.trim()) {
+        missing.push("发行时间");
+      }
+      if (publisherInput && !publisherInput.value.trim()) {
+        missing.push("出版者");
+      }
+      if (referenceInput && !referenceInput.value.trim()) {
+        missing.push("参考资料");
+      }
+
+      if (missing.length) {
+        setStatus(`Detail form filled. Missing: ${missing.join(" / ")}`);
+      } else {
+        setStatus("Detail form filled.");
+      }
+
+      if (pending) {
+        await updateState({ pending: null });
+      }
     }
   }
 
