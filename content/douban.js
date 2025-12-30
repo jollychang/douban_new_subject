@@ -905,10 +905,24 @@
     if (stored.downloadedCoverKey === downloadKey) {
       return;
     }
+    const pendingKey = stored.downloadingCoverKey;
+    const pendingAt = stored.downloadingCoverAt || 0;
+    if (pendingKey === downloadKey && Date.now() - pendingAt < 120000) {
+      return;
+    }
+    if (pendingKey === downloadKey) {
+      await updateState({ downloadingCoverKey: null, downloadingCoverAt: null });
+    }
+    await updateState({ downloadingCoverKey: downloadKey, downloadingCoverAt: Date.now() });
     const response = await downloadCover(candidate);
     if (response && response.ok) {
-      await updateState({ downloadedCoverKey: downloadKey });
+      await updateState({
+        downloadedCoverKey: downloadKey,
+        downloadingCoverKey: null,
+        downloadingCoverAt: null
+      });
     } else {
+      await updateState({ downloadingCoverKey: null, downloadingCoverAt: null });
       setStatus(`Cover download failed: ${response?.error || "unknown error"}`);
     }
   }
@@ -923,8 +937,6 @@
       setStatus("No candidate found. Go back to search page to pick one.");
       return;
     }
-
-    void maybeDownloadCover(candidate);
 
     setQuery(`${candidate.title || ""} ${candidate.artist || ""}`.trim() || "Candidate loaded.");
     setGoogleLink(`${candidate.title || ""} ${candidate.artist || ""}`.trim());
@@ -953,6 +965,8 @@
     }
 
     if (isDetailForm()) {
+      void maybeDownloadCover(candidate);
+
       const titleInput = document.querySelector("#p_27, input[name='p_27']");
       const barcodeInput = document.querySelector("#p_53, input[name='p_53']");
       const performerInputs = Array.from(document.querySelectorAll("input[name='p_48']"));
