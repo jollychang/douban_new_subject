@@ -3,6 +3,12 @@
   "name": "Douban New Subject Helper",
   "version": "0.1.0",
   "description": "Assist with searching and creating Douban music subjects.",
+  "icons": {
+    "16": "content/icons/icon-16.png",
+    "32": "content/icons/icon-32.png",
+    "48": "content/icons/icon-48.png",
+    "128": "content/icons/icon-128.png"
+  },
   "permissions": [
     "storage"
   ],
