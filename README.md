@@ -14,6 +14,7 @@ This extension adds a fixed side panel on Douban Music search and new-subject pa
 - Searches Douban by barcode or album name + artist.
 - Highlights existing Douban entries when found.
 - Auto-fills the Douban "new subject" forms (title, barcode, performers, release date, label, reference link).
+- Auto-downloads the album cover when opening the new-subject page.
 - Leaves cover upload to you (manual).
 
 ## Requirements

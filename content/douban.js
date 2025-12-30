@@ -52,6 +52,38 @@
     return (value || "").replace(/\s+/g, " ").trim();
   }
 
+  function sanitizeFilename(value) {
+    const ascii = cleanText(value).replace(/[^\x20-\x7E]/g, "");
+    return ascii
+      .replace(/[\\/:*?"<>|]+/g, "")
+      .replace(/\s+/g, "_")
+      .replace(/_+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 80);
+  }
+
+  function getCoverExtension(url) {
+    try {
+      const parsed = new URL(url);
+      const match = parsed.pathname.match(/\.(jpg|jpeg|png|webp|gif)$/i);
+      if (match) {
+        return match[1].toLowerCase();
+      }
+    } catch (error) {
+      return "jpg";
+    }
+    return "jpg";
+  }
+
+  function buildCoverFilename(candidate) {
+    const title = sanitizeFilename(candidate.title || "");
+    const artist = sanitizeFilename(candidate.artist || "");
+    const base = [title, artist].filter(Boolean).join("-");
+    const name = base || "douban_cover";
+    const ext = getCoverExtension(candidate.cover || "");
+    return `${name}.${ext}`;
+  }
+
   function escapeRegExp(value) {
     return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
@@ -228,6 +260,14 @@
         resolve(response || { ok: false, error: "No response" });
       });
     });
+  }
+
+  async function downloadCover(candidate) {
+    if (!candidate || !candidate.cover) {
+      return { ok: false, error: "No cover url" };
+    }
+    const filename = buildCoverFilename(candidate);
+    return sendMessage({ type: "downloadCover", url: candidate.cover, filename });
   }
 
   function storageGet() {
@@ -856,6 +896,23 @@
       .filter(Boolean);
   }
 
+  async function maybeDownloadCover(candidate) {
+    if (!candidate || !candidate.cover) {
+      return;
+    }
+    const downloadKey = `${candidate.cover}|${candidate.url || ""}`;
+    const stored = await storageGet();
+    if (stored.downloadedCoverKey === downloadKey) {
+      return;
+    }
+    const response = await downloadCover(candidate);
+    if (response && response.ok) {
+      await updateState({ downloadedCoverKey: downloadKey });
+    } else {
+      setStatus(`Cover download failed: ${response?.error || "unknown error"}`);
+    }
+  }
+
   async function handleNewSubjectPage() {
     ensurePanel();
     const stored = await storageGet();
@@ -866,6 +923,8 @@
       setStatus("No candidate found. Go back to search page to pick one.");
       return;
     }
+
+    void maybeDownloadCover(candidate);
 
     setQuery(`${candidate.title || ""} ${candidate.artist || ""}`.trim() || "Candidate loaded.");
     setGoogleLink(`${candidate.title || ""} ${candidate.artist || ""}`.trim());

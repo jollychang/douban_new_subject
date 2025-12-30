@@ -10,7 +10,8 @@
     "128": "content/icons/icon-128.png"
   },
   "permissions": [
-    "storage"
+    "storage",
+    "downloads"
   ],
   "host_permissions": [
     "https://music.douban.com/*",
