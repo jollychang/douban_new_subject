@@ -24,6 +24,12 @@
     if (page.url.hostname === "search.douban.com") {
       return page.url.pathname.includes("/music/subject_search");
     }
+    if (page.url.hostname === "www.douban.com") {
+      if (!page.url.pathname.startsWith("/search")) {
+        return false;
+      }
+      return page.url.searchParams.get("cat") === "1003";
+    }
     return page.url.hostname === "music.douban.com" && page.url.pathname.includes("/subject_search");
   }
 
@@ -36,7 +42,11 @@
     if (searchText) {
       return decodeURIComponent(searchText);
     }
-    const input = document.querySelector("input[name='search_text'], #inp-query");
+    const queryText = page.url.searchParams.get("q");
+    if (queryText) {
+      return decodeURIComponent(queryText);
+    }
+    const input = document.querySelector("input[name='search_text'], input[name='q'], #inp-query");
     if (input && input.value) {
       return input.value.trim();
     }
@@ -292,11 +302,17 @@
   }
 
   function buildDoubanSearchUrl(searchText) {
-    const host = page.url.hostname === "search.douban.com"
-      ? "https://search.douban.com/music/subject_search"
-      : "https://music.douban.com/subject_search";
+    let host = "https://music.douban.com/subject_search";
+    let queryKey = "search_text";
+
+    if (page.url.hostname === "search.douban.com") {
+      host = "https://search.douban.com/music/subject_search";
+    } else if (page.url.hostname === "www.douban.com") {
+      host = "https://www.douban.com/search";
+      queryKey = "q";
+    }
     const params = new URLSearchParams({
-      search_text: searchText,
+      [queryKey]: searchText,
       cat: "1003"
     });
     return `${host}?${params.toString()}`;

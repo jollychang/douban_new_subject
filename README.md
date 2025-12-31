@@ -23,6 +23,7 @@ This extension adds a fixed side panel on Douban Music search and new-subject pa
 - Network access to:
   - https://music.douban.com/
   - https://search.douban.com/
+  - https://www.douban.com/
   - https://www.prestomusic.com/
 
 ## Install (unpacked)
@@ -35,6 +36,7 @@ This extension adds a fixed side panel on Douban Music search and new-subject pa
 
 1. Open a Douban search URL, for example:
    `https://music.douban.com/subject_search?search_text=Album%20Artist`
+   or `https://www.douban.com/search?cat=1003&q=Album%20Artist`
 2. The right-side panel appears and shows Presto candidates.
 3. Pick a candidate and click:
    - "Search Douban (barcode)" or
