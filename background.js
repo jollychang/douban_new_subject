@@ -3,17 +3,23 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return false;
   }
 
-  if (message.type === "fetchHtml") {
+  if (message.type === "fetchHtml" || message.type === "fetchJson") {
     const url = typeof message.url === "string" ? message.url : "";
+    const method = typeof message.method === "string" ? message.method : "GET";
+    const headers = message.headers && typeof message.headers === "object" ? message.headers : {};
+    const body = typeof message.body === "string" ? message.body : undefined;
     if (!url) {
       sendResponse({ ok: false, error: "Missing url" });
       return false;
     }
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     fetch(url, {
+      method,
+      headers,
+      body,
       credentials: "omit",
       redirect: "follow",
       signal: controller.signal
@@ -22,9 +28,19 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
         }
-        return response.text();
+        return response.text().then((text) => ({
+          text,
+          finalUrl: response.url,
+          status: response.status
+        }));
       })
-      .then((text) => sendResponse({ ok: true, text }))
+      .then(({ text, finalUrl, status }) => {
+        if (message.type === "fetchJson") {
+          sendResponse({ ok: true, data: JSON.parse(text), text, finalUrl, status });
+          return;
+        }
+        sendResponse({ ok: true, text, finalUrl, status });
+      })
       .catch((error) => {
         const messageText = error && error.message ? error.message : "Fetch failed";
         sendResponse({ ok: false, error: messageText });

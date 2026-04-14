@@ -3,6 +3,8 @@
   const PRESTO_BASE = "https://www.prestomusic.com";
   const PRESTO_SEARCH = "https://www.prestomusic.com/classical/search?search_query=";
   const PRESTO_SEARCH_ALL = "https://www.prestomusic.com/search?search_query=";
+  const PRESTO_SEARCH_API = "https://ajax-www.prestomusic.com/api/classical/search";
+  const PRESTO_SEARCH_API_ALL = "https://ajax-www.prestomusic.com/api/search";
 
   const state = {
     panel: null,
@@ -60,6 +62,19 @@
 
   function cleanText(value) {
     return (value || "").replace(/\s+/g, " ").trim();
+  }
+
+  function normalizeComparableText(value) {
+    const text = cleanText(value)
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+
+    return text
+      .replace(/['’]/g, "")
+      .replace(/[^a-z0-9]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
   }
 
   function sanitizeFilename(value) {
@@ -339,7 +354,7 @@
     const enriched = await ensureCandidateDetails(candidate);
     const searchText = mode === "barcode" && enriched.barcode
       ? enriched.barcode
-      : `${enriched.title || ""} ${enriched.artist || ""}`.trim();
+      : buildNameSearchText(enriched);
 
     if (!searchText) {
       setStatus("Missing search text.");
@@ -367,64 +382,152 @@
     return response.text;
   }
 
+  async function fetchJson(url, body) {
+    const response = await sendMessage({
+      type: "fetchJson",
+      url,
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(body || {})
+    });
+    if (!response || !response.ok) {
+      throw new Error(response && response.error ? response.error : "Fetch failed");
+    }
+    return response.data;
+  }
+
+  function parsePrestoSearchApiResult(payload) {
+    const items = payload && Array.isArray(payload.payload) ? payload.payload : [];
+    return items
+      .filter((item) => item && item.url && item.text)
+      .map((item) => ({
+        title: cleanText(item.text),
+        artist: cleanText(item.secondLine || ""),
+        cover: cleanText(item.image || ""),
+        url: new URL(item.url, PRESTO_BASE).toString()
+      }))
+      .slice(0, 6);
+  }
+
   function parsePrestoSearch(html) {
     const doc = new DOMParser().parseFromString(html, "text/html");
-    const links = Array.from(doc.querySelectorAll("a[href*='/products/']"));
     const results = [];
     const seen = new Set();
 
-    links.forEach((link) => {
-      const href = link.getAttribute("href");
+    const pushResult = (partial) => {
+      const href = partial && partial.url ? partial.url : "";
       if (!href) {
         return;
       }
-      const url = new URL(href, PRESTO_BASE).toString();
-      if (seen.has(url)) {
+
+      let normalizedUrl = "";
+      try {
+        const parsed = new URL(href, PRESTO_BASE);
+        parsed.hash = "";
+        parsed.search = "";
+        normalizedUrl = parsed.toString();
+      } catch (error) {
+        normalizedUrl = href;
+      }
+
+      if (!normalizedUrl || seen.has(normalizedUrl)) {
         return;
       }
-      seen.add(url);
+      seen.add(normalizedUrl);
 
-      const container = link.closest("article, li, div") || link.parentElement;
-      const title = preferText(
-        container && container.querySelector("[class*='title']")?.textContent,
-        link.getAttribute("title"),
-        link.textContent,
-        container && container.querySelector("img")?.getAttribute("alt")
-      );
+      results.push({
+        title: cleanText(partial.title),
+        artist: cleanText(partial.artist),
+        cover: cleanText(partial.cover),
+        url: normalizedUrl
+      });
+    };
 
-      const artist = preferText(
-        container && container.querySelector("[class*='artist']")?.textContent,
-        container && container.querySelector("[class*='composer']")?.textContent,
-        container && container.querySelector("[class*='performer']")?.textContent,
-        container && container.querySelector("[itemprop='byArtist']")?.textContent
-      );
-
+    const resolveCover = (container) => {
       const img = container ? container.querySelector("img") : null;
       const coverRaw = preferText(
         img?.getAttribute("data-src"),
         img?.getAttribute("src"),
         img?.getAttribute("data-srcset")?.split(" ")[0]
       );
-      let cover = coverRaw;
-      if (coverRaw) {
-        try {
-          cover = new URL(coverRaw, PRESTO_BASE).toString();
-        } catch (error) {
-          cover = coverRaw;
-        }
+      if (!coverRaw) {
+        return "";
       }
+      try {
+        return new URL(coverRaw, PRESTO_BASE).toString();
+      } catch (error) {
+        return coverRaw;
+      }
+    };
 
-      if (!title) {
+    const productBlocks = Array.from(doc.querySelectorAll(
+      ".c-list__product, .c-list__product-block, .c-product-block, .c-product-grid__block"
+    ));
+
+    productBlocks.forEach((block) => {
+      const primaryLink = block.querySelector(
+        ".c-product-block__title a[href*='/products/'], .c-product-grid__title[href*='/products/'], a[href*='/products/'][title], a.o-image[href*='/products/']"
+      );
+      if (!primaryLink) {
         return;
       }
 
-      results.push({
-        title,
-        artist,
-        cover,
-        url
+      pushResult({
+        url: primaryLink.getAttribute("href"),
+        title: preferText(
+          block.querySelector(".c-product-block__title a")?.textContent,
+          block.querySelector(".c-product-grid__title")?.textContent,
+          primaryLink.getAttribute("title"),
+          primaryLink.textContent
+        ),
+        artist: preferText(
+          block.querySelector(".c-product-block__contributors")?.textContent,
+          block.querySelector("[class*='contributors']")?.textContent,
+          block.querySelector("[class*='artist']")?.textContent,
+          block.querySelector("[class*='composer']")?.textContent,
+          block.querySelector("[class*='performer']")?.textContent,
+          block.querySelector("[itemprop='byArtist']")?.textContent
+        ),
+        cover: resolveCover(block)
       });
     });
+
+    if (!results.length) {
+      const links = Array.from(doc.querySelectorAll("a[href*='/products/']"));
+      links.forEach((link) => {
+        const container = link.closest("article, li, div") || link.parentElement;
+        pushResult({
+          url: link.getAttribute("href"),
+          title: preferText(
+            container && container.querySelector("[class*='title']")?.textContent,
+            link.getAttribute("title"),
+            link.textContent,
+            container && container.querySelector("img")?.getAttribute("alt")
+          ),
+          artist: preferText(
+            container && container.querySelector("[class*='artist']")?.textContent,
+            container && container.querySelector("[class*='composer']")?.textContent,
+            container && container.querySelector("[class*='performer']")?.textContent,
+            container && container.querySelector("[itemprop='byArtist']")?.textContent
+          ),
+          cover: resolveCover(container)
+        });
+      });
+    }
+
+    if (!results.length) {
+      const regex = /href="([^"]*\/products\/[^"#?]+)(?:[#?][^"]*)?"/g;
+      let match;
+      while ((match = regex.exec(html)) !== null) {
+        pushResult({ url: match[1] });
+        if (results.length >= 6) {
+          break;
+        }
+      }
+    }
 
     return results.slice(0, 6);
   }
@@ -754,21 +857,46 @@
 
   async function loadPrestoResults(query) {
     setStatus("Searching Presto...");
-    const searchUrls = [
-      `${PRESTO_SEARCH}${encodeURIComponent(query)}`,
-      `${PRESTO_SEARCH_ALL}${encodeURIComponent(query)}`
-    ];
     let results = [];
-    for (const searchUrl of searchUrls) {
-      const html = await fetchHtml(searchUrl);
-      results = parsePrestoSearch(html);
-      if (results.length) {
-        break;
+    let apiError = "";
+
+    const apiRequests = [
+      { url: PRESTO_SEARCH_API, body: { searchText: query } },
+      { url: PRESTO_SEARCH_API_ALL, body: { searchText: query, sortByDept: 1 } }
+    ];
+
+    for (const request of apiRequests) {
+      try {
+        const payload = await fetchJson(request.url, request.body);
+        results = parsePrestoSearchApiResult(payload);
+        if (results.length) {
+          break;
+        }
+      } catch (error) {
+        apiError = error && error.message ? error.message : "API search failed";
       }
     }
 
     if (!results.length) {
-      setStatus("No Presto results.");
+      const searchUrls = [
+        `${PRESTO_SEARCH}${encodeURIComponent(query)}`,
+        `${PRESTO_SEARCH_ALL}${encodeURIComponent(query)}`
+      ];
+      for (const searchUrl of searchUrls) {
+        try {
+          const html = await fetchHtml(searchUrl);
+          results = parsePrestoSearch(html);
+          if (results.length) {
+            break;
+          }
+        } catch (error) {
+          apiError = apiError || (error && error.message ? error.message : "HTML search failed");
+        }
+      }
+    }
+
+    if (!results.length) {
+      setStatus(apiError ? `No Presto results. Last error: ${apiError}` : "No Presto results.");
       renderResults([]);
       return;
     }
@@ -803,23 +931,55 @@
     });
   }
 
-  function highlightResult(candidate) {
+  function getCandidateArtistNames(candidate) {
+    return splitPerformers(candidate?.artist || "")
+      .map((name) => normalizeComparableText(name))
+      .filter((name) => name.length >= 4);
+  }
+
+  function findMatchingResult(candidate) {
     const links = findResultLinks();
     if (!links.length) {
-      return false;
+      return null;
     }
 
-    let selected = links[0];
-    if (candidate && candidate.title) {
-      const lowerTitle = candidate.title.toLowerCase();
-      const lowerArtist = (candidate.artist || "").toLowerCase();
-      const match = links.find((link) => {
-        const text = cleanText(link.textContent).toLowerCase();
-        return text.includes(lowerTitle) || (lowerArtist && text.includes(lowerArtist));
-      });
-      if (match) {
-        selected = match;
+    const normalizedTitle = normalizeComparableText(candidate?.title || "");
+    const normalizedBarcode = cleanText(candidate?.barcode || "");
+    const normalizedPublisher = normalizeComparableText(candidate?.publisher || "");
+    const releaseYear = normalizeDate(candidate?.releaseDate || "").slice(0, 4);
+    const artistNames = getCandidateArtistNames(candidate);
+
+    for (const link of links) {
+      const container = link.closest(".result, .item, li, .subject-item") || link;
+      const linkText = cleanText(link.textContent);
+      const containerText = cleanText(container.textContent);
+      const normalizedLinkText = normalizeComparableText(linkText);
+      const normalizedContainerText = normalizeComparableText(containerText);
+      const exactTitleMatch = Boolean(normalizedTitle) && (
+        normalizedLinkText === normalizedTitle
+        || normalizedContainerText.includes(normalizedTitle)
+      );
+      const artistMatch = artistNames.some((name) => normalizedContainerText.includes(name));
+      const barcodeMatch = Boolean(normalizedBarcode) && containerText.includes(normalizedBarcode);
+      const publisherMatch = Boolean(normalizedPublisher) && normalizedContainerText.includes(normalizedPublisher);
+      const yearMatch = Boolean(releaseYear) && containerText.includes(releaseYear);
+
+      if (barcodeMatch || (exactTitleMatch && artistMatch)) {
+        return link;
       }
+
+      if (links.length === 1 && exactTitleMatch && (publisherMatch || yearMatch || !artistNames.length)) {
+        return link;
+      }
+    }
+
+    return null;
+  }
+
+  function highlightResult(candidate) {
+    const selected = findMatchingResult(candidate);
+    if (!selected) {
+      return false;
     }
 
     const container = selected.closest(".result, .item, li, .subject-item") || selected;
@@ -910,6 +1070,12 @@
       .split(/,|&|;|\//)
       .map((part) => cleanText(part))
       .filter(Boolean);
+  }
+
+  function buildNameSearchText(candidate) {
+    const title = cleanText(candidate?.title || "");
+    const artists = splitPerformers(candidate?.artist || "").join(" ");
+    return `${title} ${artists}`.trim();
   }
 
   async function maybeDownloadCover(candidate) {

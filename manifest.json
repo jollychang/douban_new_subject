@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Douban New Subject Helper",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Assist with searching and creating Douban music subjects.",
   "icons": {
     "16": "content/icons/icon-16.png",
@@ -17,7 +17,8 @@
     "https://music.douban.com/*",
     "https://search.douban.com/*",
     "https://www.douban.com/*",
-    "https://www.prestomusic.com/*"
+    "https://www.prestomusic.com/*",
+    "https://ajax-www.prestomusic.com/*"
   ],
   "background": {
     "service_worker": "background.js"
