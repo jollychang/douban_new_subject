@@ -12,6 +12,8 @@
 - [x] Confirm the Chrome Web Store update requirement for extension versioning.
 - [x] Bump the extension manifest version for the next store release.
 - [x] Verify the updated manifest metadata is syntactically valid.
+- [x] Create the Chrome Web Store upload ZIP for version `0.1.2`.
+- [x] Verify the upload ZIP contains the expected extension root files only.
 
 # Review
 
@@ -24,3 +26,4 @@
 - Increased background fetch timeout from 15s to 30s to reduce empty sidebar results on slower responses.
 - Replaced HTML scraping as the primary search path with `https://ajax-www.prestomusic.com/api/classical/search`, which returns the expected Maria Perrotta record directly for this query.
 - Bumped the extension version from `0.1.1` to `0.1.2` for the next Chrome Web Store upload and verified that `manifest.json` still parses cleanly.
+- Created `/Users/william/Works/douban_new_subject/Douban New Subject-0.1.2.zip` with only the extension runtime files and verified the archive contains `manifest.json`, `background.js`, `content/douban.js`, `content/panel.css`, and the icon assets.
