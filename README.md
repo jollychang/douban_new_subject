@@ -20,6 +20,7 @@ This extension adds a fixed side panel on Douban Music search and new-subject pa
 ## Requirements
 
 - Chrome (or Chromium-based browser).
+- Node.js 20+ for local quality checks.
 - Network access to:
   - https://music.douban.com/
   - https://search.douban.com/
@@ -58,6 +59,31 @@ This extension adds a fixed side panel on Douban Music search and new-subject pa
 - `background.js` - background service worker for cross-origin fetch.
 - `content/douban.js` - main logic, UI, parsing, and form fill.
 - `content/panel.css` - side panel styling.
+- `scripts/quality-check.mjs` - local and CI quality/security gate.
+
+## Quality checks
+
+Run the deterministic quality gate before committing or publishing:
+
+```bash
+npm run lint
+```
+
+The gate checks JavaScript syntax, manifest consistency, overly broad extension permissions, forbidden committed artifacts, common secret patterns, and dangerous JavaScript APIs. GitHub Actions runs the same gate on pushes to `main` and on pull requests.
+
+For an additional AI code review pass before pushing:
+
+```bash
+npm run review
+```
+
+This reviews uncommitted local changes. After committing but before pushing, use:
+
+```bash
+npm run review:branch
+```
+
+The review commands use your local Codex CLI login. Do not commit API keys or CI secrets for Codex review unless the workflow is explicitly designed for that.
 
 ## Troubleshooting
 

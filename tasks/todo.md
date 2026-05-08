@@ -1,26 +1,34 @@
 # Todo
 
+- [x] Add deterministic lint/security checks for the extension repository.
+- [x] Add GitHub Actions quality gate for push and pull request events.
+- [x] Add local Codex review command without committing credentials.
+- [x] Update project docs for the new quality workflow.
+- [x] Run local verification and document results.
+
+## Previous Work
+
 - [x] Diagnose why the Op. 99 & 100 Moreau search URL still shows no Presto result.
 - [x] Add a more robust scoped Presto fallback for work-number/title noise if needed.
 - [x] Verify the new query and previous query both reach product `9844946`.
 - [x] Rebuild the extension ZIP if code changes are required.
 - [x] Document the result.
 
-## Previous Work
+## Earlier Work
 
 - [x] Bump extension version from `0.1.2` to `0.1.3`.
 - [x] Create Chrome Web Store upload ZIP for version `0.1.3`.
 - [x] Verify manifest syntax and ZIP contents for version `0.1.3`.
 - [x] Document the version bump result.
 
-## Earlier Work
+## Earlier Work 2
 
 - [x] Diagnose why the exact Moreau Schubert Douban search URL shows no Presto result.
 - [x] Add a scoped Presto fallback query that removes performer-role noise when the exact query returns nothing.
 - [x] Verify the fallback reaches Presto product `9844946` and run syntax checks.
 - [x] Document the root cause and result.
 
-## Earlier Work 2
+## Earlier Work 3
 
 - [x] Inspect the Douban search flow and Presto metadata extraction for the failing Maria Perrotta case.
 - [x] Reproduce the live search responses for title, performer, and barcode queries.
@@ -59,3 +67,8 @@
 - Added a work-number fallback that strips common catalog/work labels such as `Op.`, `No.`, `D.`, `K.`, `BWV`, `RV`, `Hob.`, and `S.` before the final Presto retry.
 - Verified the cleaned query `Schubert Piano Trios Edgar Moreau Jérémie Moreau David Moreau` returns product `9844946`, and the previous cleaned query still returns product `9844946`.
 - Bumped `manifest.json` to `0.1.4`, created `/Users/william/Works/douban_new_subject/Douban New Subject-0.1.4.zip`, and verified the ZIP manifest reports version `0.1.4`.
+- Added a zero-dependency quality gate at `scripts/quality-check.mjs` that checks JavaScript syntax, manifest consistency, extension permissions, committed artifact types, common secret patterns, file sizes, and dangerous JavaScript APIs.
+- Added `package.json` scripts: `npm run lint`, `npm test`, `npm run review`, and `npm run review:branch`.
+- Added `.github/workflows/quality.yml` to run the quality gate on pushes to `main` and pull requests with read-only repository permissions.
+- Updated `.gitignore` to keep ZIP/CRX packages, `.env` files, dependency folders, coverage, and build outputs out of git.
+- Verified `npm run lint`, `npm test`, `git diff --check`, workflow YAML parsing, and a local Codex review run.
