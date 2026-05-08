@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Douban New Subject Helper",
-  "version": "0.1.2",
+  "version": "0.1.4",
   "description": "Assist with searching and creating Douban music subjects.",
   "icons": {
     "16": "content/icons/icon-16.png",

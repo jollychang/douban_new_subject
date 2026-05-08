@@ -412,6 +412,45 @@
       .slice(0, 6);
   }
 
+  function stripPrestoSearchNoise(query) {
+    return cleanText(query)
+      .replace(/\s*[\(\（][^)）]*[\)\）]\s*/g, " ")
+      .replace(/['’]/g, "")
+      .replace(/[.,:;&]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function stripPrestoWorkNumberNoise(query) {
+    return cleanText(query)
+      .replace(/\b(?:op|opp|opus)\.?\s*\d+[a-z]?(?:\s*(?:&|and|,|\/|-)\s*\d+[a-z]?)*/gi, " ")
+      .replace(/\b(?:no|nos)\.?\s*\d+[a-z]?(?:\s*(?:&|and|,|\/|-)\s*\d+[a-z]?)*/gi, " ")
+      .replace(/\b(?:d|k|kv|bwv|rv|hob|s)\.?\s*\d+[a-z]?(?:\s*(?:&|and|,|\/|-)\s*\d+[a-z]?)*/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function buildPrestoSearchQueries(query) {
+    const queries = [];
+    const addQuery = (value) => {
+      const text = cleanText(value);
+      if (!text) {
+        return;
+      }
+      const key = normalizeComparableText(text);
+      const exists = queries.some((current) => normalizeComparableText(current) === key);
+      if (!exists) {
+        queries.push(text);
+      }
+    };
+
+    addQuery(query);
+    addQuery(stripPrestoSearchNoise(query));
+    addQuery(stripPrestoSearchNoise(stripPrestoWorkNumberNoise(query)));
+
+    return queries;
+  }
+
   function parsePrestoSearch(html) {
     const doc = new DOMParser().parseFromString(html, "text/html");
     const results = [];
@@ -859,11 +898,12 @@
     setStatus("Searching Presto...");
     let results = [];
     let apiError = "";
+    const searchQueries = buildPrestoSearchQueries(query);
 
-    const apiRequests = [
-      { url: PRESTO_SEARCH_API, body: { searchText: query } },
-      { url: PRESTO_SEARCH_API_ALL, body: { searchText: query, sortByDept: 1 } }
-    ];
+    const apiRequests = searchQueries.flatMap((searchText) => [
+      { url: PRESTO_SEARCH_API, body: { searchText } },
+      { url: PRESTO_SEARCH_API_ALL, body: { searchText, sortByDept: 1 } }
+    ]);
 
     for (const request of apiRequests) {
       try {
@@ -878,10 +918,10 @@
     }
 
     if (!results.length) {
-      const searchUrls = [
-        `${PRESTO_SEARCH}${encodeURIComponent(query)}`,
-        `${PRESTO_SEARCH_ALL}${encodeURIComponent(query)}`
-      ];
+      const searchUrls = searchQueries.flatMap((searchText) => [
+        `${PRESTO_SEARCH}${encodeURIComponent(searchText)}`,
+        `${PRESTO_SEARCH_ALL}${encodeURIComponent(searchText)}`
+      ]);
       for (const searchUrl of searchUrls) {
         try {
           const html = await fetchHtml(searchUrl);
