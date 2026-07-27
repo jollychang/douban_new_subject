@@ -39,14 +39,22 @@
     return page.url.hostname === "music.douban.com" && page.url.pathname.includes("/new_subject");
   }
 
-  function getSearchText() {
+  function getUrlSearchText() {
     const searchText = page.url.searchParams.get("search_text");
     if (searchText) {
-      return decodeURIComponent(searchText);
+      return cleanText(searchText);
     }
     const queryText = page.url.searchParams.get("q");
     if (queryText) {
-      return decodeURIComponent(queryText);
+      return cleanText(queryText);
+    }
+    return "";
+  }
+
+  function getSearchText() {
+    const urlSearchText = getUrlSearchText();
+    if (urlSearchText) {
+      return urlSearchText;
     }
     const input = document.querySelector("input[name='search_text'], input[name='q'], #inp-query");
     if (input && input.value) {
@@ -896,6 +904,7 @@
 
   async function loadPrestoResults(query) {
     setStatus("Searching Presto...");
+    state.results = [];
     let results = [];
     let apiError = "";
     const searchQueries = buildPrestoSearchQueries(query);
@@ -938,7 +947,7 @@
     if (!results.length) {
       setStatus(apiError ? `No Presto results. Last error: ${apiError}` : "No Presto results.");
       renderResults([]);
-      return;
+      return [];
     }
 
     state.results = results;
@@ -956,6 +965,7 @@
     }
 
     setStatus("Presto results ready.");
+    return state.results;
   }
 
   function findResultLinks() {
@@ -1063,7 +1073,7 @@
 
     const found = highlightResult(stored.candidate);
     if (found) {
-      await updateState({ pending: null });
+      await updateState({ candidate: null, pending: null });
       return;
     }
 
@@ -1118,6 +1128,84 @@
     return `${title} ${artists}`.trim();
   }
 
+  function selectPrestoCandidate(query, results) {
+    if (!Array.isArray(results) || !results.length) {
+      return null;
+    }
+
+    const normalizedQuery = normalizeComparableText(query);
+    const exactMatches = normalizedQuery
+      ? results.filter((result) => normalizeComparableText(buildNameSearchText(result)) === normalizedQuery)
+      : [];
+
+    if (exactMatches.length === 1) {
+      return exactMatches[0];
+    }
+    if (results.length === 1) {
+      return results[0];
+    }
+    return null;
+  }
+
+  function hasActiveCreationPending(pending) {
+    return Boolean(
+      pending
+      && cleanText(pending.searchText || "")
+      && (pending.stage === "create" || pending.stage === "detail")
+    );
+  }
+
+  async function resolveNewSubjectCandidate() {
+    const directQuery = getUrlSearchText();
+
+    if (directQuery) {
+      setQuery(directQuery);
+      setGoogleLink(directQuery);
+      await updateState({ candidate: null, pending: null });
+
+      let results = [];
+      try {
+        results = await loadPrestoResults(directQuery);
+      } catch (error) {
+        renderResults([]);
+        setStatus("Presto search failed. The saved candidate was not reused.");
+        return { candidate: null, pending: null };
+      }
+
+      const candidate = selectPrestoCandidate(directQuery, results);
+      if (!candidate) {
+        if (results.length > 1) {
+          setStatus("Multiple Presto results found. Refine the search before prefilling.");
+        }
+        return { candidate: null, pending: null };
+      }
+
+      const pending = {
+        mode: "direct",
+        searchText: directQuery,
+        stage: "detail",
+        createdAt: Date.now()
+      };
+      await updateState({ candidate, pending });
+      return { candidate, pending };
+    }
+
+    const stored = await storageGet();
+    if (!stored.candidate || !hasActiveCreationPending(stored.pending)) {
+      if (stored.candidate || stored.pending) {
+        await updateState({ candidate: null, pending: null });
+      }
+      renderResults([]);
+      setStatus("No active candidate found. Start from a Douban search or include search_text.");
+      return { candidate: null, pending: null };
+    }
+
+    return {
+      candidate: stored.candidate,
+      pending: stored.pending
+    };
+  }
+
   async function maybeDownloadCover(candidate) {
     if (!candidate || !candidate.cover) {
       return;
@@ -1151,12 +1239,9 @@
 
   async function handleNewSubjectPage() {
     ensurePanel();
-    const stored = await storageGet();
-    const candidate = stored.candidate;
-    const pending = stored.pending;
+    const { candidate, pending } = await resolveNewSubjectCandidate();
 
     if (!candidate) {
-      setStatus("No candidate found. Go back to search page to pick one.");
       return;
     }
 
@@ -1164,7 +1249,7 @@
     setGoogleLink(`${candidate.title || ""} ${candidate.artist || ""}`.trim());
     renderResults([candidate]);
 
-    const stage = pending && pending.stage ? pending.stage : "manual";
+    const stage = pending.stage;
 
     if (isFirstStepForm()) {
       const titleInput = document.querySelector("#p_title, input[name='p_title']");
@@ -1175,7 +1260,7 @@
       }
 
       const form = titleInput ? titleInput.closest("form") : document.querySelector("form");
-      const shouldSubmit = Boolean(pending && stage !== "detail");
+      const shouldSubmit = stage === "create";
       if (form && shouldSubmit) {
         await updateState({ pending: { ...pending, stage: "detail" } });
         setStatus("Filled first step. Submitting...");
@@ -1187,8 +1272,6 @@
     }
 
     if (isDetailForm()) {
-      void maybeDownloadCover(candidate);
-
       const titleInput = document.querySelector("#p_27, input[name='p_27']");
       const barcodeInput = document.querySelector("#p_53, input[name='p_53']");
       const performerInputs = Array.from(document.querySelectorAll("input[name='p_48']"));
@@ -1227,9 +1310,8 @@
         setStatus("Detail form filled.");
       }
 
-      if (pending) {
-        await updateState({ pending: null });
-      }
+      await maybeDownloadCover(candidate);
+      await updateState({ candidate: null, pending: null });
     }
   }
 
