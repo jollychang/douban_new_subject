@@ -1,0 +1,53 @@
+name: Bug report
+description: Report a reproducible problem in the extension.
+title: "bug: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include cookies, account data, private URLs, or security-vulnerability details. Use the security reporting link for vulnerabilities.
+  - type: input
+    id: version
+    attributes:
+      label: Extension version
+      description: Include the version shown in Chrome's extension details.
+      placeholder: "0.1.5"
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and version
+      placeholder: "Chrome 136"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Use a non-sensitive example where possible.
+      placeholder: |
+        1. Open ...
+        2. Search ...
+        3. Click ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Safe supporting information
+      description: Share redacted console output or screenshots only if they contain no private data.

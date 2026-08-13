@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   quality:
-    name: Lint and security checks
+    name: Test and quality checks
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
@@ -27,5 +27,5 @@ jobs:
           node-version: 24
           package-manager-cache: false
 
-      - name: Run quality gate
-        run: npm run lint
+      - name: Run full test suite and quality gate
+        run: npm test

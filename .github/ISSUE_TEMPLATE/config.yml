@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://chromewebstore.google.com/detail/douban-new-subject-helper/akgdaclanljoajifphppdlpkhfgokeih
+    about: Do not disclose vulnerabilities in a public issue; use the Chrome Web Store developer contact instead.

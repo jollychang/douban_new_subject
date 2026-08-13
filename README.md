@@ -27,7 +27,15 @@ This extension adds a fixed side panel on Douban Music search and new-subject pa
   - https://www.douban.com/
   - https://www.prestomusic.com/
 
-## Install (unpacked)
+## Install
+
+### Chrome Web Store (recommended)
+
+Install [Douban New Subject Helper from the Chrome Web Store](https://chromewebstore.google.com/detail/douban-new-subject-helper/akgdaclanljoajifphppdlpkhfgokeih).
+
+The store reported 31 users when checked on 2026-08-13. This is the Chrome Web Store user figure, not a download count, GitHub adoption metric, or estimate of a wider ecosystem.
+
+### Unpacked development copy
 
 1. Open Chrome and go to `chrome://extensions`.
 2. Enable Developer mode.
@@ -63,13 +71,15 @@ This extension adds a fixed side panel on Douban Music search and new-subject pa
 
 ## Quality checks
 
-Run the deterministic quality gate before committing or publishing:
+Run the complete local gate before committing or publishing:
 
 ```bash
-npm run lint
+npm test
 ```
 
-The gate checks JavaScript syntax, manifest consistency, overly broad extension permissions, forbidden committed artifacts, common secret patterns, and dangerous JavaScript APIs. GitHub Actions runs the same gate on pushes to `main` and on pull requests.
+The test suite runs nine behavior tests for the new-subject flow, then the deterministic quality/security gate. The latter checks JavaScript syntax, manifest consistency, overly broad extension permissions, forbidden committed artifacts, common secret patterns, and dangerous JavaScript APIs. GitHub Actions runs the full `npm test` command on pushes to `main` and on pull requests.
+
+For release-package validation and deterministic packaging instructions, see [docs/releasing.md](docs/releasing.md).
 
 For an additional AI code review pass before pushing:
 
@@ -91,6 +101,16 @@ The review commands use your local Codex CLI login. Do not commit API keys or CI
 - If Presto changes page structure, parsing may need updates in `content/douban.js`.
 - The panel shows missing required fields in its status area.
 
-## License
+## Maintenance and support
 
-No license specified yet. Add a LICENSE file if you plan to open source this repository.
+The primary maintainer is [jollychang](https://github.com/jollychang). The maintainer is responsible for triaging reports, reviewing changes, verifying releases, and keeping the Chrome Web Store runtime aligned with public source.
+
+- [Changelog](CHANGELOG.md)
+- [Contributing guide](CONTRIBUTING.md)
+- [Security policy](SECURITY.md)
+- [Release process](docs/releasing.md)
+- [Report a bug or request a feature](https://github.com/jollychang/douban_new_subject/issues/new/choose)
+
+## License status
+
+No license has been published yet. Do not assume permission to reuse the code or assets until the copyright ownership and third-party asset provenance have been confirmed and a `LICENSE` file is added.

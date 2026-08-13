@@ -6,6 +6,8 @@
   "scripts": {
     "lint": "node scripts/quality-check.mjs",
     "test": "node --test tests/new-subject-flow.test.mjs && npm run lint",
+    "verify:release": "node scripts/verify-release.mjs",
+    "build:release": "sh scripts/package-release.sh",
     "review": "codex review --uncommitted -c 'model=\"gpt-5.2\"' -c 'model_reasoning_effort=\"high\"' --enable web_search_cached",
     "review:branch": "codex review --base origin/main -c 'model=\"gpt-5.2\"' -c 'model_reasoning_effort=\"high\"' --enable web_search_cached"
   },
